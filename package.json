@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@openai/realtime-api-beta": "github:openai/openai-realtime-api-beta",
+    "@react-three/drei": "^9.117.3",
+    "@react-three/fiber": "^8.17.10",
+    "@types/three": "^0.170.0",
     "@types/ws": "^8.5.13",
     "ai": "^4.0.7",
     "dotenv": "^16.4.5",
@@ -22,8 +25,10 @@
     "react": "19.0.0-rc-66855b96-20241106",
     "react-dom": "19.0.0-rc-66855b96-20241106",
     "react-mic": "^12.4.6",
+    "simplex-noise": "^4.0.3",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
+    "three": "^0.170.0",
     "ws": "^8.18.0",
     "zod": "^3.23.8"
   },

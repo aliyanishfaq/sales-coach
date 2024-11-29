@@ -6,11 +6,14 @@ import { Phone, PhoneOff, Mic, MicOff } from 'lucide-react';
 
 import { RealtimeClient } from '@openai/realtime-api-beta';
 import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools';
+import { VoiceVisualizer } from '../../components/VoiceVisualizer';
 
 export default function TrainingSession({ params }: { params: { personaId: string } }) {
   const [isCallActive, setIsCallActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [conversationItems, setConversationItems] = useState<ItemType[]>([]);
+  const [isAITalking, setIsAITalking] = useState(false);
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
 
   const clientRef = useRef<RealtimeClient>();
   const wavRecorderRef = useRef<WavRecorder>();
@@ -39,12 +42,9 @@ export default function TrainingSession({ params }: { params: { personaId: strin
     client.on('conversation.updated', async ({ item, delta }) => {
       console.log('Conversation updated:', { item, delta }); // Add logging
       if (delta?.audio) {
-        try {
-          // Fix: Use wavStreamPlayerRef.current instead of wavStreamPlayer
-          await wavStreamPlayerRef.current.add16BitPCM(delta.audio, item.id);
-        } catch (err) {
-          console.error('Error playing audio:', err);
-        }
+        setIsAITalking(true);
+        await wavStreamPlayerRef.current.add16BitPCM(delta.audio, item.id);
+        setIsAITalking(false);
       }
 
       // Update conversation items
@@ -85,6 +85,10 @@ export default function TrainingSession({ params }: { params: { personaId: strin
   const toggleCall = async () => {
     if (!isCallActive) {
       try {
+        // Get audio stream when starting call
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setAudioStream(stream);
+        
         // Start the call
         const client = clientRef.current;
         const wavRecorder = wavRecorderRef.current;
@@ -169,6 +173,7 @@ export default function TrainingSession({ params }: { params: { personaId: strin
       } catch (err) {
         console.error('Error ending call:', err);
       }
+      setAudioStream(null);
     }
   };
 
@@ -254,6 +259,12 @@ export default function TrainingSession({ params }: { params: { personaId: strin
           </AnimatePresence>
         </div>
       </motion.div>
+      
+      <VoiceVisualizer 
+        isActive={isCallActive} 
+        isAITalking={isAITalking}
+        audioStream={audioStream}
+      />
     </main>
   );
 }

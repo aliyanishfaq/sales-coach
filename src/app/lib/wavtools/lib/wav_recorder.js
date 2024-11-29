@@ -502,8 +502,9 @@ export class WavRecorder {
    * @returns {Promise<import('./wav_packer.js').WavPackerAudioType>}
    */
   async end() {
+    // If there's no active session, just return
     if (!this.processor) {
-      throw new Error('Session ended: please call .begin() first');
+      return null;
     }
 
     const _processor = this.processor;
