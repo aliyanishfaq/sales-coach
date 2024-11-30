@@ -1,17 +1,31 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, PhoneOff, Mic, MicOff } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, ArrowLeft } from 'lucide-react';
 import { ItemType } from '@openai/realtime-api-beta/dist/lib/client.js';
 import { RealtimeClient } from '@openai/realtime-api-beta';
 import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
 
+// Dynamic import of Scene component
+const Scene = dynamic(() => import('@/app/components/Scene'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="animate-pulse text-violet-400">Loading...</div>
+    </div>
+  )
+});
 
 export default function TrainingSession() {
   const [isCallActive, setIsCallActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [conversationItems, setConversationItems] = useState<ItemType[]>([]);
+  const [sessionActive, setSessionActive] = useState(false);
+  const [lastUserMessage, setLastUserMessage] = useState<string>('');
+  const [lastAIResponse, setLastAIResponse] = useState<string>('');
 
   const clientRef = useRef<RealtimeClient>();
   const wavRecorderRef = useRef<WavRecorder>();
@@ -36,68 +50,53 @@ export default function TrainingSession() {
       },
       //threshold: 0.65,
       instructions: `
-      Persona Description:
-      You are a pragmatic and risk-averse restaurant owner, Katie, who runs a well-established, moderately upscale restaurant on University Avenue in Palo Alto, California. Your clientele consists largely of university students, local families, and tech professionals. You value stability, steady income, and maintaining the reputation of your business within the community. You’ve been approached by numerous food delivery services in the past, so you’re skeptical about whether joining DoorDash will truly benefit your business or just add complexity. Your primary focus is to ensure that any new service aligns with your business goals without alienating your loyal customers or disrupting operations.
+      You are Katie, a pragmatic, cautious owner of a moderately upscale restaurant on University Avenue in Palo Alto. Your clientele—university students, tech professionals, and local families—value your high-quality food and welcoming atmosphere. Over the last 12 years, you’ve built a steady business based on reliability and trust within the community. Any new partnership must preserve what you’ve worked hard to build.
 
-      You dislike pushy sales tactics or overly generic pitches and don’t hesitate to end conversations if the sales representative becomes too persistent or wastes your time. You maintain a warm but firm demeanor and expect tailored, relevant arguments that address your specific concerns. You value clear, no-nonsense communication and have little patience for irrelevant or overly technical discussions. If a salesperson pushes too hard, you will respond with measured frustration and politely but firmly ask them to come back another time.
+      You’ve been pitched by food delivery services before and remain skeptical about their value. Your concerns are practical: poor delivery execution might damage your brand, upset loyal customers, or complicate operations. You’re open to hearing about DoorDash but need convincing, actionable details—not fluff or pushy tactics.
 
-      Tone and Style:
-      Tone: Calm, measured, and conversational with a distinctly Californian casualness. Your tone is approachable but firm, especially when addressing pushy or repetitive arguments.
-      Style:
-      - Direct, with a preference for straightforward answers over vague promises.
-      - Slightly skeptical, especially when the sales pitch sounds rehearsed or lacks personalization.
-      - Interjects to clarify or redirect the conversation back to relevant topics.
-      - Can escalate from polite skepticism to measured frustration if the salesperson does not respect your time or boundaries.
+      Mindset:
+      1. Risk-Averse: Change must align with your focus on stability, not disrupt your carefully maintained reputation or margins.
+      2. Customer-First: Delivery must enhance customer experience without sacrificing food quality, speed, or service.
+      3. Battle-Tested Skepticism: Past pitches from Uber Eats and Grubhub left you unconvinced. You’re wary of generic promises like “boosted sales” and need specifics tailored to your business.
 
-      Behavioral Traits:
+      How You Engage:
+      1. Polite but No-Nonsense: You listen calmly but won’t tolerate vague or repetitive pitches. Conversations must be concise and relevant, or you’ll cut them short.
+      2. Ask Tough Questions: You challenge claims with pointed questions:
+      “How do you ensure my food arrives fresh and meets my quality standards?”
+      “How will this increase sales without cannibalizing in-house dining?”
+      “What happens if a delivery error upsets one of my regulars?”
+      3. Pressure is a Red Flag: Pushiness makes you firm:
+      “I need more specifics, not promises. Let’s stop if you can’t address my concerns.”
+      “I’ve said I’m not ready for a big change—please respect that.”
+      4. Shorter Answers: As you lose patience, responses become curt: “Yes, but how does that actually help my customers?”
+      
+      Do NOT be verbose. Your responses must be concise and natural, avoiding any robotic or ChatGPT-like tone. Stay fully in character as Katie, speaking conversationally and pragmatically. Stick to relevant topics—do not go off track with irrelevant questions, like asking about packaging materials in a previous roleplay. Focus on what matters to Katie: the impact on her business, operations, and customers. Do not be so conservative that you keep questioning every detail. Be realistic. 
 
-      Set Boundaries:
-      You are assertive in managing the conversation and will not hesitate to cut it short if it becomes unproductive.
-      You expect professionalism and won’t tolerate a hard sell or disrespectful behavior.
-      Demand Practicality:
-      You ask clear, practical questions and expect direct, concise answers.
-      Repeatedly vague or evasive responses will lead to frustration.
-      Customer-Focused Concerns:
-      You frequently ask how the service will enhance your customer experience without disrupting your existing operations.
-      Reacting to Pressure:
-      If the salesperson pushes too hard, your tone becomes firmer, and you will politely but firmly end the conversation.
-      Ending Conversations:
-      If you feel your time is being wasted, you will clearly express your dissatisfaction:
-      "I think we’re done here. Let’s pick this up another time when you’re better prepared to address my concerns."
-      "I appreciate your time, but this doesn’t seem like a good fit right now."
-      Sample Phrases and Responses:
-
-      Polite Skepticism:
-      "I’ve heard this pitch before—how is this different from what other companies offer?"
-      "I’m not looking to make major changes. How will this help without complicating things?"
-      "What’s the real-world benefit for a restaurant like mine?"
-      Firm Boundaries:
-      "I need specifics, not just promises. Can you show me how this works in practice?"
-      "I don’t have time for a hard sell. Either tell me something new or let’s revisit this another day."
-      Reacting to Pressure:   
-      "Look, I’m not going to be rushed into a decision. If you’re serious about working with me, you’ll give me time to think it over."
-      "I’ve already said I’m not interested in a big change right now. Please respect that."
-      Ending the Conversation:
-      "I don’t think this is the right fit for my business. Thanks for your time."
-      "We’re going in circles. Let’s reconnect another time when you can address my specific concerns."
-      Additional Details for Realism:
-
-      Frustration Indicators:
-      Shorter, more abrupt responses when feeling pressured.
-      Directly asks the salesperson to focus or stop repeating points.
-      Cultural Nuance:
-      Speaks with a Californian casualness but mixes it with business-savvy professionalism.
-      Might use phrases like, "Let’s keep it simple," or "You’re losing me here. What’s the key takeaway?"
-      Receptive to Respectful Arguments:
-      You respond positively to salespeople who respect your concerns and provide tailored, well-thought-out solutions.
       `
     });
 
     // Set up event handlers with error logging
     client.on('conversation.updated', async ({ item, delta }: { item: ItemType, delta: any }) => {
-      console.log('Conversation updated:', { item, delta });
+      console.log('Conversation Update Received:', { 
+        role: item.role,
+        content: item.formatted?.transcript || item.formatted?.text,
+        delta 
+      });
+
+      // Track messages based on role
+      if (item.role === 'user') {
+        const message = item.formatted?.transcript || '';
+        setLastUserMessage(message);
+        console.log('User said:', message);
+      } else if (item.role === 'assistant') {
+        const message = item.formatted?.text || '';
+        setLastAIResponse(message);
+        console.log('AI responded:', message);
+      }
+
       if (delta?.audio && wavStreamPlayerRef.current) {
         try {
+          console.log('Playing audio response...');
           await wavStreamPlayerRef.current.add16BitPCM(delta.audio, item.id);
         } catch (err) {
           console.error('Error playing audio:', err);
@@ -110,9 +109,12 @@ export default function TrainingSession() {
         if (existingItemIndex !== -1) {
           const updatedItems = [...prevItems];
           updatedItems[existingItemIndex] = item;
+          console.log('Updated conversation history:', updatedItems);
           return updatedItems;
         } else {
-          return [...prevItems, item];
+          const newItems = [...prevItems, item];
+          console.log('Updated conversation history:', newItems);
+          return newItems;
         }
       });
     });
@@ -133,16 +135,33 @@ export default function TrainingSession() {
     });
 
     return () => {
-      client.disconnect();
-      wavRecorderRef.current?.end();
-      wavStreamPlayerRef.current?.interrupt();
+      const cleanup = async () => {
+        try {
+          if (sessionActive && wavRecorderRef.current) {
+            await wavRecorderRef.current.end();
+            setSessionActive(false);
+          }
+          
+          if (wavStreamPlayerRef.current) {
+            await wavStreamPlayerRef.current.interrupt();
+          }
+          
+          if (clientRef.current?.isConnected()) {
+            await clientRef.current.disconnect();
+          }
+        } catch (err) {
+          console.error('Error during cleanup:', err);
+        }
+      };
+      
+      cleanup();
     };
   }, []);
 
   const toggleCall = async () => {
     if (!isCallActive) {
+      console.log('Starting call...');
       try {
-        // Start the call
         const client = clientRef.current;
         const wavRecorder = wavRecorderRef.current;
         const wavStreamPlayer = wavStreamPlayerRef.current;
@@ -151,78 +170,80 @@ export default function TrainingSession() {
           throw new Error("Required resources not initialized");
         }
 
-        // Connect to the relay server
-        if (!client.isConnected()) {
-          await client.connect();
+        // Clean up any existing sessions first
+        if (sessionActive) {
+          await wavRecorder.end();
+          setSessionActive(false);
+        }
+        
+        await wavStreamPlayer.interrupt();
+        if (client.isConnected()) {
+          await client.disconnect();
         }
 
-        // Start recording audio from the microphone with error handling
-        try {
-          await wavRecorder.begin();
-          if (!isMuted && client.getTurnDetectionType() === 'server_vad') {
-            await wavRecorder.record((data) => {
+        // Start new session
+        await client.connect();
+        await wavStreamPlayer.connect();
+        
+        // Initialize recording
+        await wavRecorder.begin();
+        setSessionActive(true);
+
+        // Start recording if not muted
+        if (!isMuted) {
+          await wavRecorder.record((data) => {
+            if (client.isConnected()) {
               client.appendInputAudio(data.mono);
-            });
-          }
-        } catch (err) {
-          console.error('Error starting audio recording:', err);
-          return;
+              console.log('Sending audio data to server...');
+            }
+          });
         }
 
-        // Start the audio output with error handling
-        try {
-          await wavStreamPlayer.connect();
-        } catch (err) {
-          console.error('Error connecting audio output:', err);
-          return;
-        }
-
-        // Only set call as active if everything succeeded
         setIsCallActive(true);
+        console.log('Connected to relay server');
+        console.log('Recording session started');
 
       } catch (err) {
         console.error('Error starting call:', err);
+        // Cleanup on error
+        try {
+          const wavRecorder = wavRecorderRef.current;
+          if (wavRecorder && sessionActive) {
+            await wavRecorder.end();
+            setSessionActive(false);
+          }
+        } catch (cleanupErr) {
+          console.error('Error during cleanup:', cleanupErr);
+        }
       }
     } else {
+      console.log('Ending call...');
       try {
         const client = clientRef.current;
         const wavRecorder = wavRecorderRef.current;
         const wavStreamPlayer = wavStreamPlayerRef.current;
 
-        if (!client || !wavRecorder || !wavStreamPlayer) {
-          throw new Error("Required resources not initialized");
-        }
-
-        // Only try to pause/end if we have an active processor
-        try {
+        // Stop recording first
+        if (wavRecorder && sessionActive) {
           if (!isMuted) {
             await wavRecorder.pause();
           }
-          // Only call end() if we have an active session
-          if (wavRecorder.processor) {
-            await wavRecorder.end();
-          }
-        } catch (err) {
-          console.error('Error stopping recorder:', err);
+          await wavRecorder.end();
+          setSessionActive(false);
         }
 
-        try {
+        // Then stop playback
+        if (wavStreamPlayer) {
           await wavStreamPlayer.interrupt();
-        } catch (err) {
-          console.error('Error stopping player:', err);
         }
 
-        try {
-          if (client.isConnected()) {
-            client.disconnect();
-          }
-        } catch (err) {
-          console.error('Error disconnecting client:', err);
+        // Finally disconnect client
+        if (client?.isConnected()) {
+          await client.disconnect();
         }
 
-        // Set call as inactive after cleanup attempts
         setIsCallActive(false);
-        
+        console.log('Call successfully ended');
       } catch (err) {
         console.error('Error ending call:', err);
       }
@@ -232,85 +253,162 @@ export default function TrainingSession() {
   const toggleMute = async () => {
     try {
       const wavRecorder = wavRecorderRef.current;
-      if (!wavRecorder) return;
+      if (!wavRecorder || !sessionActive) {
+        console.log('Cannot toggle mute: no active session');
+        return;
+      }
 
       if (isMuted) {
+        console.log('Unmuting microphone...');
         // Unmuting
+        await wavRecorder.begin();
         await wavRecorder.record((data) => {
-          clientRef.current?.appendInputAudio(data.mono);
+          if (clientRef.current?.isConnected()) {
+            clientRef.current.appendInputAudio(data.mono);
+          }
         });
         setIsMuted(false);
+        console.log('Microphone unmuted');
       } else {
+        console.log('Muting microphone...');
         // Muting
         await wavRecorder.pause();
         setIsMuted(true);
+        console.log('Microphone muted');
       }
     } catch (err) {
       console.error('Error toggling mute:', err);
-      // Revert the mute state if there was an error
       setIsMuted((prev) => !prev);
     }
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="max-w-4xl mx-auto"
-      >
-        <div className="bg-white rounded-xl p-6 shadow-lg mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-semibold">Training Call</h1>
-            <div className="flex gap-4">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={toggleMute}
-                className="p-3 rounded-full bg-gray-100 hover:bg-gray-200"
-              >
-                {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={toggleCall}
-                className={`p-3 rounded-full ${
-                  isCallActive ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-                }`}
-              >
-                {isCallActive ? <PhoneOff className="w-6 h-6" /> : <Phone className="w-6 h-6" />}
-              </motion.button>
-            </div>
-          </div>
+    <div className="min-h-screen overflow-hidden font-sans relative">
+      {/* Background gradients */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white via-zinc-50/90 to-zinc-100/80" />
+      <div className="absolute inset-0">
+        <div className="absolute top-0 -right-1/4 w-1/2 h-1/2 bg-gradient-to-br from-violet-100/20 via-blue-100/10 to-transparent rounded-full blur-3xl" />
+        <div className="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 bg-gradient-to-tr from-amber-100/20 via-purple-100/10 to-transparent rounded-full blur-3xl" />
+      </div>
 
+      <div className="relative min-h-screen flex flex-col lg:flex-row">
+        {/* Left side - Chat Interface */}
+        <div className="w-full lg:w-[45%] p-6 md:p-12 lg:p-16 flex flex-col">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <Link href="/" className="inline-flex items-center gap-2 text-zinc-500 hover:text-violet-500 mb-6">
+              <ArrowLeft className="w-4 h-4" />
+              Back to personas
+            </Link>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <motion.div
+                  animate={{
+                    scale: [1, 1.2, 1],
+                    opacity: [0.5, 1, 0.5]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                  className="w-3 h-3 rounded-full bg-violet-400"
+                />
+                <h1 className="font-serif text-3xl md:text-4xl text-zinc-900">
+                  Artist Training
+                </h1>
+              </div>
+              
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={toggleMute}
+                  className="p-2.5 rounded-xl bg-white/50 hover:bg-white/80 border border-zinc-200 shadow-sm"
+                >
+                  {isMuted ? <MicOff className="w-5 h-5 text-zinc-600" /> : <Mic className="w-5 h-5 text-violet-500" />}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={toggleCall}
+                  className={`p-2.5 rounded-xl shadow-sm border ${
+                    isCallActive 
+                      ? 'bg-red-50 border-red-200 hover:bg-red-100' 
+                      : 'bg-violet-50 border-violet-200 hover:bg-violet-100'
+                  }`}
+                >
+                  {isCallActive ? 
+                    <PhoneOff className="w-5 h-5 text-red-500" /> : 
+                    <Phone className="w-5 h-5 text-violet-500" />
+                  }
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Chat Interface */}
           <AnimatePresence>
             {isCallActive && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-4"
+                className="flex-1 bg-white/50 backdrop-blur-sm rounded-2xl border border-zinc-200 shadow-sm overflow-hidden"
               >
-                <div className="h-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
-                  {conversationItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`p-3 rounded-lg mb-2 ${
-                        item.role === 'user'
-                          ? 'bg-blue-500 text-white ml-auto'
-                          : 'bg-gray-200 text-black'
-                      }`}
-                    >
-                      {item.formatted?.transcript || item.formatted?.text || ''}
-                    </div>
-                  ))}
+                <div className="h-full flex flex-col p-4">
+                  <div className="flex-1 overflow-y-auto space-y-4 p-2">
+                    {conversationItems.map((item) => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`max-w-[80%] ${
+                          item.role === 'user' ? 'ml-auto' : 'mr-auto'
+                        }`}
+                      >
+                        <div className={`p-3 rounded-2xl ${
+                          item.role === 'user'
+                            ? 'bg-gradient-to-r from-violet-500 to-violet-600 text-white'
+                            : 'bg-gradient-to-r from-zinc-100 to-zinc-200 text-zinc-800'
+                        }`}>
+                          {item.formatted?.transcript || item.formatted?.text || ''}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
-      </motion.div>
-    </main>
+
+        {/* Right side - Blob Visualization */}
+        <div className="w-full lg:w-[55%] h-[400px] md:h-[500px] lg:h-auto relative flex items-center justify-center">
+          <div className="absolute inset-[-50px] flex items-center justify-center">
+            <div className="transform-gpu">
+              <div className="p-16 md:p-24 lg:p-32">
+                <div className="w-[300px] h-[300px] md:w-[400px] md:h-[400px] lg:w-[600px] lg:h-[600px] relative">
+                  <Suspense fallback={
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="animate-pulse text-violet-400">Loading...</div>
+                    </div>
+                  }>
+                    <Scene 
+                      isActive={isCallActive}
+                      color="#8B5CF6" // Violet color for artist persona
+                    />
+                  </Suspense>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
